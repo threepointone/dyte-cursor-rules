@@ -1,0 +1,425 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+[//]: # (dyte react ui kit – cursor rules (vite))
+
+# overview
+
+**dyte** provides a managed media backend (sfus, turn, recording, rtmp) plus typed sdk layers so teams can add high‑quality voice/video with a handful of react primitives. latency on public internet averages 200 ms (signaling included) and scales to 10k viewers per webinar out‑of‑the‑box.
+
+### core value propositions
+
+* **ship fast** – drop‑in ui kit sidesteps web‑rtc edge cases.
+* **scale automatically** – server elasticity and regional routing.
+* **fine‑grained customisation** – theme tokens, headless hooks, rest apis.
+* **compliance baked in** – iso 27001, hipaa‑ready, gdpr.
+
+### representative use cases
+
+| vertical       | scenario                                                        | dyte components                                                                           |
+| -------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| ed‑tech        | instructor with 40 students, breakout rooms, polls, raise‑hand  | `DyteStage`, `DytePolls`, `DyteParticipants`, custom breakout orchestration via rest api  |
+| saas support   | click‑to‑call inside dashboard, agent screenshares client’s tab | `DyteScreenShareToggle`, `DyteChat`, event hooks to autofill ticket id                    |
+| tele‑health    | doctor‑patient call, waiting room, file upload for reports      | `DyteWaitingRoom` (compose with state machine), `DyteFileMessage`, custom theme for brand |
+| virtual events | keynote to 8k viewers + low‑latency Q\&A                        | web‑core hooks with streaming mode, rtmp ingest out                                       |
+| gaming         | squad voice comms overlay in react canvas                       | headless hooks only, render avatar circles on canvas                                      |
+
+### integration archetypes
+
+1. **full ui** – `DyteMeeting` delivers complete interface in <30 LOC; suitable for mvp.
+2. **composed ui** – pick control bar + stage + chat for bespoke layouts.
+3. **headless** – rely solely on hooks for 3d/webgl overlays, native wrappers.
+
+### advanced examples
+
+<details>
+<summary>screen share aware layout snippet</summary>
+
+```tsx
+import { DyteScreenShareToggle, useDyteMeeting, DyteGrid } from '@dytesdk/react-ui-kit';
+
+function ClassroomLayout() {
+  const { self, participants } = useDyteMeeting();
+  const isSharing = self.screenShareEnabled;
+
+  return (
+    <>
+      <DyteScreenShareToggle />
+      {isSharing ? (
+        <div className="w-full h-96 border">
+          {/* presenter’s screen */}
+          {participants.presenter && (
+            <video ref={participants.presenter.screenShareRef} autoPlay />
+          )}
+        </div>
+      ) : (
+        <DyteGrid />
+      )}
+    </>
+  );
+}
+```
+
+</details>
+
+<details>
+<summary>react query helper for server‑side token creation (express)</summary>
+
+```ts
+// api/meeting.ts
+import axios from 'axios';
+export async function createParticipant(meetingId: string) {
+  const { data } = await axios.post(
+    `https://api.cluster.dyte.in/v2/meetings/${meetingId}/participants`,
+    {
+      name: 'guest',
+      preset_name: 'group_call_host',
+    },
+    {
+      headers: { Authorization: `Bearer ${process.env.DYTE_ORG_API_KEY}` },
+    }
+  );
+  return data.auth_token;
+}
+```
+
+</details>
+
+> ℹ️ more recipe snippets appear throughout this file — search `### example`.
+
+# scope
+
+this document supports **vite‑based** react projects integrating `@dytesdk/react‑web‑core` and `@dytesdk/react‑ui‑kit` (ui kit v1.x). other frameworks are out of scope.
+
+---
+
+# prerequisites
+
+```bash
+npm install --save-exact @dytesdk/react-web-core @dytesdk/react-ui-kit
+npm install --save-dev vite @vitejs/plugin-react typescript
+```
+
+*minimum node ≥ 18.14.0*
+
+---
+
+# environment variables (vite only exposes `VITE_*`)
+
+```env
+VITE_DYTE_AUTH_TOKEN="${PARTICIPANT_AUTH_TOKEN}"
+VITE_DYTE_BASE_URL="https://api.cluster.dyte.in/v2" # optional
+```
+
+---
+
+# vite configuration
+
+```ts title="vite.config.ts"
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  define: {
+    global: 'window', // required by react‑web‑core
+  },
+  optimizeDeps: {
+    include: ['@dytesdk/react-web-core', '@dytesdk/react-ui-kit'],
+  },
+});
+```
+
+---
+
+# minimal implementation blueprint
+
+```tsx title="App.tsx"
+import { useEffect } from 'react';
+import { DyteProvider, useDyteClient } from '@dytesdk/react-web-core';
+import { DyteMeeting } from '@dytesdk/react-ui-kit';
+
+export default function App() {
+  const [meeting, initMeeting] = useDyteClient();
+
+  useEffect(() => {
+    initMeeting({
+      authToken: import.meta.env.VITE_DYTE_AUTH_TOKEN,
+      defaults: { audio: false, video: false },
+    });
+  }, []);
+
+  if (!meeting) return null; // sdk initialising
+
+  return (
+    <DyteProvider value={meeting}>
+      <DyteMeeting meeting={meeting} mode="fill" showSetupScreen={false} />
+    </DyteProvider>
+  );
+}
+```
+
+## server‑side token issuance
+
+call **create meeting → add participant** rest endpoints to retrieve `authToken`. tokens expire per ttl (default 24 h). regenerate on `MeetingEnded` or http 401.
+
+---
+
+# component catalogue (grouped)
+
+### core
+
+`DyteProvider`, `DyteMeeting`, `DyteStage`, `DyteGrid`, `DyteSpotlightGrid`
+
+### control
+
+`DyteControlbar`, `DyteMicToggle`, `DyteCameraToggle`, `DyteScreenShareToggle`, `DyteRecordingToggle`, `DyteLeaveMeeting`
+
+### communication
+
+`DyteChat`, `DytePolls`, `DyteParticipants`, `DyteNotifications`
+
+### utility
+
+`DyteNetworkIndicator`, `DyteLogo`, `DyteClock`, `DyteIdleScreen`
+
+### modals
+
+`DyteSettings`, `DyteConfirmationModal`, `DyteOverlayModal`
+
+### primitives
+
+`DyteAvatar`, `DyteButton`, `DyteTooltip`, `DyteSwitch`, `DyteTextField`
+
+*import path: `@dytesdk/react-ui-kit/components/<kebab-name>` (tree‑shakable)*
+
+full catalogue available in appendix A.
+
+---
+
+# hooks reference
+
+| hook                  | description                 | return type                                   |
+| --------------------- | --------------------------- | --------------------------------------------- |
+| `useDyteClient()`     | create + memoise sdk client | `[meeting: DyteMeeting, init: (opts) ⇒ void]` |
+| `useDyteMeeting()`    | obtain meeting from context | `DyteMeeting`                                 |
+| `useDyteSelector(fn)` | reactive derived state      | `any`                                         |
+| `useDytePolls()`      | poll operations             | `{ polls, createPoll, vote }`                 |
+| `useDyteChat()`       | chat operations             | `{ messages, send }`                          |
+
+---
+
+# event surface (common subset)
+
+```txt
+meeting.on('connected', handler)
+meeting.on('disconnected', handler)
+meeting.on('reconnecting', handler)
+meeting.participants.on('participantJoined', handler)
+meeting.participants.on('participantLeft', handler)
+meeting.polls.on('pollStarted', handler)
+meeting.chat.on('messageReceived', handler)
+```
+
+`on()` returns an unsubscribe function.
+
+---
+
+# customisation capabilities
+
+1. **theme** – override css variables such as `--dyte-color-primary`.
+2. **internationalisation** – supply a custom `t` function or bundled locale from `@dytesdk/react-ui-kit/locales`.
+3. **icons** – inject svg map using the `iconPack` prop.
+4. **layout** – compose grids/primitives for bespoke stages (see layout cookbook).
+
+---
+
+# performance notes
+
+* set `build.chunkSizeWarningLimit=2000` to silence wasm warnings.
+* lazy‑import heavy routes with `React.lazy`.
+* disable unused media tracks to reduce bandwidth.
+
+---
+
+# accessibility
+
+all controls ship with aria roles + keyboard bindings. when building custom wrappers forward key events.
+
+---
+
+# testing
+
+* **jest** – mock rtc via `@dytesdk/react-web-core/mocks`.
+* **msw** – intercept rest endpoints for storybook.
+* **playwright** – run with `--use-fake-device-for-media-stream`.
+
+---
+
+# deployment
+
+vite build is static; host on cf pages, vercel, netlify. ensure websocket upgrades allowed to `wss://*.dyte.io`. add to csp:
+
+```txt
+connect-src wss://*.dyte.io https://api.cluster.dyte.in;
+```
+
+---
+
+# troubleshooting faq
+
+| symptom                 | likely cause          | resolution                                |
+| ----------------------- | --------------------- | ----------------------------------------- |
+| `window is not defined` | `global` shim missing | add in vite config (see above)            |
+| blank tiles safari      | autoplay restriction  | require user gesture / call `enableAudio` |
+| recording toggle hidden | plan lacks feature    | enable in dashboard                       |
+| auth 401 mid‑session    | token expired         | regenerate participant token              |
+
+---
+
+# change‑log highlights
+
+* **2025‑03**: media permission event renamed to `mediaPermissionUpdate`.
+* **2024‑11**: `DyteParticipantsStageList` removed; query `DyteStage` instead.
+
+---
+
+# further reading
+
+* quickstart – [https://docs.dyte.io/react-ui-kit/quickstart](https://docs.dyte.io/react-ui-kit/quickstart)
+* hooks – [https://docs.dyte.io/react-ui-kit/using-hooks](https://docs.dyte.io/react-ui-kit/using-hooks)
+* theming – [https://docs.dyte.io/react-ui-kit/customizations/theming](https://docs.dyte.io/react-ui-kit/customizations/theming)
+* screen share – [https://docs.dyte.io/guides/capabilities/screensharing/basics](https://docs.dyte.io/guides/capabilities/screensharing/basics)
+* rest api – [https://docs.dyte.io/rest](https://docs.dyte.io/rest)
+
+---
+
+## additional recipe examples
+
+<details>
+<summary>start/stop cloud recording and capture recording ID</summary>
+
+```tsx
+import { DyteRecordingToggle, useDyteMeeting } from '@dytesdk/react-ui-kit';
+import { useEffect } from 'react';
+
+export function RecordButton() {
+  const { recording, self } = useDyteMeeting();
+
+  useEffect(() => {
+    const fn = (evt: { recordingId: string }) => {
+      console.log('recording started, id:', evt.recordingId);
+    };
+    recording.on('recordingStarted', fn);
+    return () => recording.off('recordingStarted', fn);
+  }, []);
+
+  // only hosts may record
+  if (!self.permissions.recording) return null;
+  return <DyteRecordingToggle />;
+}
+```
+
+</details>
+
+<details>
+<summary>quick poll creator for webinar hosts</summary>
+
+```tsx
+import { useDytePolls } from '@dytesdk/react-ui-kit';
+
+export const PollCreator = () => {
+  const { createPoll } = useDytePolls();
+  const handleCreate = () =>
+    createPoll({
+      question: 'Rate today’s session',
+      options: ['🔥', '👍', '🤔', '💤'],
+      multiple: false,
+      anonymous: true,
+    });
+  return <button onClick={handleCreate}>Launch feedback poll</button>;
+};
+```
+
+</details>
+
+<details>
+<summary>brand theming via css variables</summary>
+
+```css
+/* theme/dyte-custom.css */
+:root {
+  --dyte-color-primary: #4f46e5; /* indigo‑600 */
+  --dyte-color-error:   #dc2626; /* red‑600 */
+  --dyte-font-body:     'Inter', sans-serif;
+}
+```
+
+```tsx
+import 'theme/dyte-custom.css';
+```
+
+</details>
+
+<details>
+<summary>create breakout room and redirect participants (serverless)</summary>
+
+```ts
+// pages/api/breakout.ts (next.js example)
+import { NextApiRequest, NextApiResponse } from 'next';
+import axios from 'axios';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { parentMeetingId, topic } = req.body;
+  const { data } = await axios.post(
+    `https://api.cluster.dyte.in/v2/meetings/${parentMeetingId}/group-calls`,
+    { title: topic },
+    { headers: { Authorization: `Bearer ${process.env.DYTE_ORG_API_KEY}` } }
+  );
+  res.json({ meetingId: data.id });
+}
+```
+
+```tsx
+// client redirect
+const { data } = await fetch('/api/breakout', { method: 'POST', body: JSON.stringify({ parentMeetingId, topic: 'Debug Room' }) }).then(r => r.json());
+window.location.href = `/meeting/${data.meetingId}`;
+```
+
+</details>
+
+<details>
+<summary>headless voice indicator overlay (gaming)</summary>
+
+```tsx
+import { useDyteMeeting } from '@dytesdk/react-web-core';
+
+export const VoiceMeters = () => {
+  const { participants } = useDyteMeeting();
+  const speaking = participants.filter(p => p.audioEnabled && p.isSpeaking);
+  return (
+    <div className="absolute bottom-4 left-4 space-y-2">
+      {speaking.map(p => (
+        <div key={p.id} className="flex items-center gap-2">
+          <img src={p.picture} className="w-6 h-6 rounded-full" />
+          <div className="w-32 h-1 bg-gray-700">
+            <div style={{ width: `${p.audioLevel * 100}%` }} className="h-1 bg-green-500" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+</details>
+
+---
+
+## appendix A – exhaustive component list (v1.x)
+
+`DyteAudioVisualizer`, `DyteAvatar`, `DyteButton`, `DyteCameraToggle`, `DyteChatToggle`, `DyteClock`, `DyteConfirmationModal`, `DyteControlbar`, `DyteControlbarButton`, `DyteDialogManager`, `DyteDialog`, `DyteEmojiPicker`, `DyteEndedScreen`, `DyteFileMessage`, `DyteFullscreenToggle`, `DyteGridPagination`, `DyteGrid`, `DyteHeader`, `DyteIcon`, `DyteIdleScreen`, `DyteImageMessage`, `DyteImageViewer`, `DyteLeaveButton`, `DyteLeaveMeeting`, `DyteLogo`, `DyteMeetingTitle`, `DyteMenuItem`, `DyteMenuList`, `DyteMenu`, `DyteMicToggle`, `DyteMixedGrid`, `DyteMoreToggle`, `DyteNameTag`, `DyteNetworkIndicator`, `DyteNotification`, `DyteNotifications`, `DyteOverlayModal`, `DyteParticipantCount`, `DyteParticipantTile`, `DyteParticipant`, `DyteParticipantsAudio`, `DyteParticipantsStageList`, `DyteParticipantsToggle`, `DyteParticipants`, `DytePermissionsMessage`, `DytePluginMain`, `DytePluginsToggle`, `DytePlugins`, `DytePollForm`, `DytePoll`, `DytePollsToggle`, `DytePolls`, `DyteRecordingIndicator`, `DyteRemoteAccessManager`, `DyteScreenshareView`, `DyteSettingsAudio`, `DyteSettingsToggle`, `DyteSettingsVideo`, `DyteSettings`, `DyteSetupScreen`, `DyteSidebar`, `DyteSimpleGrid`, `DyteSpinner`, `DyteSpotlightGrid`, `DyteSwitch`, `DyteTextField`, `DyteTextMessage`, `DyteTooltip`, `DyteViewerCount`.
+
+[//]: # "end of .cursorrules"

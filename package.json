@@ -1,0 +1,12 @@
+{
+  "name": "@dytesdk/cursor-rules",
+  "version": "0.0.0",
+  "description": "cursor rules for dyte",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Sunil Pai <spai@cloudflare.com",
+  "license": "ISC",
+  "type": "module"
+}
